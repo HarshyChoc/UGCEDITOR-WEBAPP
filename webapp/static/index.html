@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harsh's Twinky</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <h1>Harsh's Twinky</h1>
+        <p>
+          A golden‑sweet workflow for batch edits, fast concatenation, and zip‑ready
+          UGC exports.
+        </p>
+      </header>
+
+      <nav class="tabs">
+        <button class="active" data-tab="concat">Concat</button>
+        <button data-tab="ugc">UGC</button>
+      </nav>
+
+      <section class="tab active" id="concat">
+        <div class="grid">
+          <div class="card">
+            <h2>Inputs</h2>
+            <div class="field">
+              <label>Folder A videos</label>
+              <input type="file" id="concat-a" multiple />
+              <div class="file-list" id="concat-a-list">No files uploaded.</div>
+            </div>
+            <div class="field">
+              <label>Folder B videos</label>
+              <input type="file" id="concat-b" multiple />
+              <div class="file-list" id="concat-b-list">No files uploaded.</div>
+            </div>
+            <div class="actions">
+              <button class="secondary" id="concat-clear">Clear uploads</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Options</h2>
+            <div class="field">
+              <label>Order</label>
+              <select id="concat-order">
+                <option value="A_THEN_B">A then B</option>
+                <option value="B_THEN_A">B then A</option>
+              </select>
+            </div>
+            <div class="inline">
+              <div class="field">
+                <label>CRF</label>
+                <input type="number" id="concat-crf" value="18" />
+              </div>
+              <div class="field">
+                <label>Fast copy</label>
+                <select id="concat-fast">
+                  <option value="false" selected>Disabled</option>
+                  <option value="true">Enabled</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label><input type="checkbox" id="overlay-a-enable" /> Overlay text on A</label>
+              <input type="text" id="overlay-a-text" placeholder="Overlay text for A" />
+            </div>
+            <div class="inline">
+              <div class="field">
+                <label>Overlay A X</label>
+                <input type="number" id="overlay-a-x" value="0" />
+              </div>
+              <div class="field">
+                <label>Overlay A Y</label>
+                <input type="number" id="overlay-a-y" value="0" />
+              </div>
+            </div>
+            <div class="inline">
+              <div class="field">
+                <label>Overlay A Size</label>
+                <input type="number" id="overlay-a-size" value="48" />
+              </div>
+              <div class="field">
+                <label>Overlay A Duration (s)</label>
+                <input type="number" id="overlay-a-duration" value="0" />
+              </div>
+            </div>
+            <div class="field">
+              <label>Overlay A Color</label>
+              <input type="text" id="overlay-a-color" value="white" />
+            </div>
+
+            <div class="field">
+              <label><input type="checkbox" id="overlay-b-enable" /> Overlay text on B</label>
+              <input type="text" id="overlay-b-text" placeholder="Overlay text for B" />
+            </div>
+            <div class="inline">
+              <div class="field">
+                <label>Overlay B X</label>
+                <input type="number" id="overlay-b-x" value="0" />
+              </div>
+              <div class="field">
+                <label>Overlay B Y</label>
+                <input type="number" id="overlay-b-y" value="0" />
+              </div>
+            </div>
+            <div class="inline">
+              <div class="field">
+                <label>Overlay B Size</label>
+                <input type="number" id="overlay-b-size" value="48" />
+              </div>
+              <div class="field">
+                <label>Overlay B Duration (s)</label>
+                <input type="number" id="overlay-b-duration" value="0" />
+              </div>
+            </div>
+            <div class="field">
+              <label>Overlay B Color</label>
+              <input type="text" id="overlay-b-color" value="white" />
+            </div>
+
+            <div class="actions">
+              <button class="primary" id="concat-start">Start Concat Job</button>
+            </div>
+            <p class="notice">Matches are computed by filename (basename) just like the desktop app.</p>
+          </div>
+
+          <div class="card">
+            <h2>Job status</h2>
+            <div class="status" id="concat-status">
+              <div>Job ID: <span id="concat-job-id">-</span></div>
+              <div>Status: <span id="concat-job-state">idle</span></div>
+              <div class="progress"><span id="concat-progress"></span></div>
+              <div>Summary: <span id="concat-summary">-</span></div>
+            </div>
+            <div class="field">
+              <label>Logs</label>
+              <div class="log-box" id="concat-logs">No logs yet.</div>
+            </div>
+            <div class="field">
+              <label>Zip outputs</label>
+              <div class="output-list" id="concat-outputs"></div>
+            </div>
+            <div class="actions">
+              <button class="secondary" id="concat-download-flat" disabled>Download flat zip</button>
+              <button class="secondary" id="concat-download-nested" disabled>Download nested zip</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab" id="ugc">
+        <div class="grid">
+          <div class="card">
+            <h2>Inputs</h2>
+            <div class="field">
+              <label>UGC videos</label>
+              <input type="file" id="ugc-videos" multiple />
+              <div class="file-list" id="ugc-videos-list">No files uploaded.</div>
+            </div>
+            <div class="field">
+              <label>UGC folder upload (Chrome/Safari)</label>
+              <input type="file" id="ugc-folder" webkitdirectory directory multiple />
+              <p class="notice">Select a folder to upload all videos inside.</p>
+            </div>
+            <div class="field">
+              <label>Overlay add1.png (optional)</label>
+              <input type="file" id="ugc-add1" />
+            </div>
+            <div class="field">
+              <label>Overlay add2.mov (optional)</label>
+              <input type="file" id="ugc-add2" />
+            </div>
+            <div class="field">
+              <label>ClipEnd.mov (optional)</label>
+              <input type="file" id="ugc-clip" />
+            </div>
+            <div class="actions">
+              <button class="secondary" id="ugc-clear">Clear uploads</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Options</h2>
+            <div class="inline">
+              <div class="field">
+                <label>Add1 X</label>
+                <input type="number" id="ugc-add1-x" value="190" />
+              </div>
+              <div class="field">
+                <label>Add1 Y</label>
+                <input type="number" id="ugc-add1-y" value="890" />
+              </div>
+            </div>
+            <div class="inline">
+              <div class="field">
+                <label>Add2 opacity</label>
+                <input type="number" step="0.1" min="0" max="1" id="ugc-add2-opacity" value="0.5" />
+              </div>
+              <div class="field">
+                <label>CRF</label>
+                <input type="number" id="ugc-crf" value="18" />
+              </div>
+            </div>
+            <div class="field">
+              <label><input type="checkbox" id="ugc-captions" checked /> Enable captions (AssemblyAI)</label>
+            </div>
+            <div class="field">
+              <label>AssemblyAI API key (optional if set on server)</label>
+              <input type="password" id="ugc-api-key" placeholder="sk_..." />
+            </div>
+            <div class="actions">
+              <button class="primary" id="ugc-start">Start UGC Job</button>
+            </div>
+            <p class="notice">If captions are enabled, the server needs ASSEMBLYAI_API_KEY or a key here.</p>
+          </div>
+
+          <div class="card">
+            <h2>Job status</h2>
+            <div class="status" id="ugc-status">
+              <div>Job ID: <span id="ugc-job-id">-</span></div>
+              <div>Status: <span id="ugc-job-state">idle</span></div>
+              <div class="progress"><span id="ugc-progress"></span></div>
+              <div>Summary: <span id="ugc-summary">-</span></div>
+            </div>
+            <div class="field">
+              <label>Logs</label>
+              <div class="log-box" id="ugc-logs">No logs yet.</div>
+            </div>
+            <div class="field">
+              <label>Zip output</label>
+              <div class="output-list" id="ugc-outputs"></div>
+            </div>
+            <div class="actions">
+              <button class="secondary" id="ugc-download-all" disabled>Download all outputs</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

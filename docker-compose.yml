@@ -1,0 +1,32 @@
+services:
+  redis:
+    image: redis:7
+    platform: ${DOCKER_DEFAULT_PLATFORM:-linux/arm64}
+    ports:
+      - "6379:6379"
+
+  web:
+    build: .
+    platform: ${DOCKER_DEFAULT_PLATFORM:-linux/arm64}
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - RECLIP_DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - redis
+
+  worker:
+    build: .
+    platform: ${DOCKER_DEFAULT_PLATFORM:-linux/arm64}
+    command: ["python", "-m", "webapp.worker"]
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - RECLIP_DATA_DIR=/app/data
+      - ASSEMBLYAI_API_KEY=${ASSEMBLYAI_API_KEY}
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - redis
