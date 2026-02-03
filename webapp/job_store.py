@@ -144,7 +144,8 @@ def resolve_output_path(job_id: str, rel_path: str) -> Optional[Path]:
 
 
 def create_outputs_zip(job_id: str) -> Optional[Path]:
-    return create_outputs_zip_for(job_id, "output", "outputs.zip")
+    # Zip everything under the job's output directory.
+    return create_outputs_zip_for(job_id, ".", "outputs.zip")
 
 
 def create_outputs_zip_for(job_id: str, rel_dir: str, zip_name: str) -> Optional[Path]:
