@@ -10,10 +10,26 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
-from .config import UPLOADS_DIR, ensure_dirs
+from redis import Redis
+
+from .config import UPLOADS_DIR, REDIS_URL, ensure_dirs
 
 
 _SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+# Redis client for upload metadata
+_redis_client: Optional[Redis] = None
+
+
+def _get_redis() -> Redis:
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = Redis.from_url(REDIS_URL, decode_responses=True)
+    return _redis_client
+
+
+def _upload_key(file_id: str) -> str:
+    return f"upload:{file_id}"
 
 
 @dataclass
@@ -35,10 +51,6 @@ def sanitize_filename(name: str) -> str:
     name = os.path.basename(name or "upload")
     name = _SAFE_NAME_RE.sub("_", name)
     return name or "upload"
-
-
-def _meta_path(file_id: str) -> Path:
-    return UPLOADS_DIR / f"{file_id}.json"
 
 
 def save_upload(upload_file, role: Optional[str] = None) -> UploadMeta:
@@ -65,21 +77,21 @@ def save_upload(upload_file, role: Optional[str] = None) -> UploadMeta:
         created_at=_utc_now(),
     )
 
-    with open(_meta_path(file_id), "w", encoding="utf-8") as f:
-        json.dump(asdict(meta), f, indent=2, ensure_ascii=True)
+    # Store metadata in Redis
+    redis = _get_redis()
+    redis.set(_upload_key(file_id), json.dumps(asdict(meta)))
 
     return meta
 
 
 def get_upload_meta(file_id: str) -> UploadMeta:
-    meta_file = _meta_path(file_id)
-    if not meta_file.exists():
+    redis = _get_redis()
+    data = redis.get(_upload_key(file_id))
+
+    if data is None:
         raise FileNotFoundError(f"Upload not found: {file_id}")
 
-    with open(meta_file, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    return UploadMeta(**data)
+    return UploadMeta(**json.loads(data))
 
 
 def stage_upload(file_id: str, dest_path: Path) -> UploadMeta:
