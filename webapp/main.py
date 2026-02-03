@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -8,6 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from redis import Redis
+from redis.exceptions import ConnectionError as RedisConnectionError
 from rq import Queue
 
 from . import tasks
@@ -23,6 +25,21 @@ from .job_store import (
     update_job,
 )
 from .storage import save_upload
+
+
+def create_redis_connection(url: str, max_retries: int = 5, retry_delay: float = 2.0) -> Redis:
+    """Create Redis connection with retry logic."""
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            conn = Redis.from_url(url)
+            conn.ping()  # Test connection
+            return conn
+        except RedisConnectionError as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+    raise RedisConnectionError(f"Failed to connect to Redis after {max_retries} attempts: {last_error}")
 
 
 class OverlayConfig(BaseModel):
@@ -69,7 +86,7 @@ class UGCJobRequest(BaseModel):
 
 
 ensure_dirs()
-redis_conn = Redis.from_url(REDIS_URL)
+redis_conn = create_redis_connection(REDIS_URL)
 queue = Queue(QUEUE_NAME, connection=redis_conn)
 
 app = FastAPI(title="Harsh's Twinky")
