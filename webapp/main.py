@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
+import threading
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -10,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from redis import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
-from rq import Queue
+from rq import Queue, Worker
 
 from . import tasks
 from .config import QUEUE_NAME, REDIS_URL, STATIC_DIR, ensure_dirs
@@ -89,7 +92,29 @@ ensure_dirs()
 redis_conn = create_redis_connection(REDIS_URL)
 queue = Queue(QUEUE_NAME, connection=redis_conn)
 
-app = FastAPI(title="Harsh's Twinky")
+# Flag to control embedded worker
+RUN_EMBEDDED_WORKER = os.getenv("RUN_EMBEDDED_WORKER", "true").lower() == "true"
+
+
+def run_worker_thread():
+    """Run RQ worker in a background thread."""
+    worker = Worker([queue], connection=redis_conn)
+    worker.work(with_scheduler=True, burst=False)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: optionally start embedded worker
+    worker_thread = None
+    if RUN_EMBEDDED_WORKER:
+        worker_thread = threading.Thread(target=run_worker_thread, daemon=True)
+        worker_thread.start()
+        print("Embedded RQ worker started")
+    yield
+    # Shutdown: worker thread is daemon, will stop automatically
+
+
+app = FastAPI(title="Harsh's Twinky", lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
