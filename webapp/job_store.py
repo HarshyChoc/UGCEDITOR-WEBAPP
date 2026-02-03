@@ -2,13 +2,33 @@ from __future__ import annotations
 
 import json
 import os
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
-import zipfile
 
-from .config import JOBS_DIR, ensure_dirs
+from redis import Redis
+
+from .config import JOBS_DIR, REDIS_URL, ensure_dirs
+
+# Redis client for job metadata
+_redis_client: Optional[Redis] = None
+
+
+def _get_redis() -> Redis:
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = Redis.from_url(REDIS_URL, decode_responses=True)
+    return _redis_client
+
+
+def _job_key(job_id: str) -> str:
+    return f"job:{job_id}"
+
+
+def _log_key(job_id: str) -> str:
+    return f"job:{job_id}:logs"
 
 
 def _utc_now() -> str:
@@ -19,24 +39,11 @@ def _job_dir(job_id: str) -> Path:
     return JOBS_DIR / job_id
 
 
-def _job_file(job_id: str) -> Path:
-    return _job_dir(job_id) / "job.json"
-
-
-def _log_file(job_id: str) -> Path:
-    return _job_dir(job_id) / "logs.txt"
-
-
-def _atomic_write(path: Path, data: dict[str, Any]) -> None:
-    temp_path = path.with_suffix(".tmp")
-    with open(temp_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=True)
-    os.replace(temp_path, path)
-
-
 def create_job(job_type: str, payload: dict[str, Any]) -> dict[str, Any]:
     ensure_dirs()
     job_id = uuid4().hex
+
+    # Create local directory for files
     job_dir = _job_dir(job_id)
     job_dir.mkdir(parents=True, exist_ok=True)
 
@@ -52,23 +59,34 @@ def create_job(job_type: str, payload: dict[str, Any]) -> dict[str, Any]:
         "outputs": [],
     }
 
-    _atomic_write(_job_file(job_id), job)
+    # Store in Redis
+    redis = _get_redis()
+    redis.set(_job_key(job_id), json.dumps(job))
+
     return job
 
 
 def read_job(job_id: str) -> dict[str, Any]:
-    job_file = _job_file(job_id)
-    if not job_file.exists():
+    redis = _get_redis()
+    data = redis.get(_job_key(job_id))
+    if data is None:
         raise FileNotFoundError(f"Job not found: {job_id}")
-    with open(job_file, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return json.loads(data)
 
 
 def update_job(job_id: str, **updates: Any) -> dict[str, Any]:
     job = read_job(job_id)
+
+    # Handle nested updates for progress
+    if "progress" in updates and isinstance(updates["progress"], dict):
+        job["progress"].update(updates.pop("progress"))
+
     job.update(updates)
     job["updated_at"] = _utc_now()
-    _atomic_write(_job_file(job_id), job)
+
+    redis = _get_redis()
+    redis.set(_job_key(job_id), json.dumps(job))
+
     return job
 
 
@@ -77,15 +95,17 @@ def set_job_status(job_id: str, status: str) -> dict[str, Any]:
 
 
 def append_log(job_id: str, message: str) -> None:
-    log_path = _log_file(job_id)
-    log_path.parent.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
-    with open(log_path, "a", encoding="utf-8") as f:
-        f.write(f"[{timestamp}] {message}\n")
+    log_line = f"[{timestamp}] {message}\n"
+
+    redis = _get_redis()
+    redis.append(_log_key(job_id), log_line)
 
 
 def get_job_paths(job_id: str) -> dict[str, Path]:
+    ensure_dirs()
     base = _job_dir(job_id)
+    base.mkdir(parents=True, exist_ok=True)
     return {
         "base": base,
         "input": base / "input",
@@ -94,12 +114,12 @@ def get_job_paths(job_id: str) -> dict[str, Path]:
 
 
 def tail_logs(job_id: str, max_lines: int = 200) -> str:
-    log_path = _log_file(job_id)
-    if not log_path.exists():
+    redis = _get_redis()
+    logs = redis.get(_log_key(job_id))
+    if not logs:
         return ""
-    with open(log_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-    return "".join(lines[-max_lines:])
+    lines = logs.split("\n")
+    return "\n".join(lines[-max_lines:])
 
 
 def list_output_files(job_id: str) -> list[str]:
