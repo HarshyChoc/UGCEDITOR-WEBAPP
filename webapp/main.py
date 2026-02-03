@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from redis import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
-from rq import Queue, Worker
+from rq import Queue, SimpleWorker
 
 from . import tasks
 from .config import QUEUE_NAME, REDIS_URL, STATIC_DIR, ensure_dirs
@@ -97,9 +97,9 @@ RUN_EMBEDDED_WORKER = os.getenv("RUN_EMBEDDED_WORKER", "true").lower() == "true"
 
 
 def run_worker_thread():
-    """Run RQ worker in a background thread."""
-    worker = Worker([queue], connection=redis_conn)
-    worker.work(with_scheduler=True, burst=False)
+    """Run RQ worker in a background thread using SimpleWorker (no forking)."""
+    worker = SimpleWorker([queue], connection=redis_conn)
+    worker.work(burst=False)
 
 
 @asynccontextmanager
